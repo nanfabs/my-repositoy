@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useMemo, useState } from "react";
 import {
   ArrowUpDown,
@@ -83,9 +82,11 @@ const validateRow = (r: Row) => {
     }
   }
 
-  if (!r.bufferKm) errors.bufferKm = "Required";
-  const b = Number(r.bufferKm);
-  if (isNaN(b) || b <= 0 || b > 200) errors.bufferKm = "1–200 km";
+  // Radius is optional
+  if (r.bufferKm) {
+    const b = Number(r.bufferKm);
+    if (isNaN(b) || b <= 0 || b > 200) errors.bufferKm = "1–200 km";
+  }
 
   if (!r.crop) errors.crop = "Required";
 
@@ -259,10 +260,10 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
   const createTemplateCSV = () => {
     const header = [
       "Location",
-      "Buffer (km)",
+      "Radius (km)",
       "Crop",
       "Irrigation",
-      "Quantity (MT/year)",
+      "Volume (MT/year)",
       "Indicator",
     ].join(",");
     const example = [
@@ -436,12 +437,18 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
                       </div>
 
                       <div>
-                        <Label className="text-xs">Buffer (km)</Label>
+                        <Label className="text-xs">Radius (km)</Label>
                         <Input
-                          className="w-full h-9 text-sm"
+                          className={`w-full h-9 text-sm ${locationType !== "Coordinates" ? "bg-muted opacity-60 cursor-not-allowed" : ""}`}
                           value={bufferKm}
                           onChange={(e) => setBufferKm(e.target.value)}
+                          disabled={locationType !== "Coordinates"}
                         />
+                        {locationType !== "Coordinates" && (
+                          <div className="text-[11px] text-muted-foreground mt-1">
+                            Radius only applies to point locations (Coordinates).
+                          </div>
+                        )}
                       </div>
 
                       <div>
@@ -477,7 +484,7 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
                       </div>
 
                       <div>
-                        <Label className="text-xs">Quantity (MT/year)</Label>
+                        <Label className="text-xs">Volume (MT/year)</Label>
                         <Input
                           className="w-full h-9 text-sm"
                           value={quantity}
@@ -510,10 +517,10 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
                         <TableHeader>
                           <TableRow>
                             <TableHead>Location</TableHead>
-                            <TableHead>Buffer</TableHead>
+                            <TableHead>Radius</TableHead>
                             <TableHead>Crop</TableHead>
                             <TableHead>Irrigation</TableHead>
-                            <TableHead>Quantity (MT/year)</TableHead>
+                            <TableHead>Volume (MT/year)</TableHead>
                             <TableHead>Indicators</TableHead>
                             <TableHead>Status</TableHead>
                           </TableRow>
