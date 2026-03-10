@@ -661,7 +661,7 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
                         <div>
                           <div className="text-sm font-semibold">Customize Analysis</div>
                           <div className="text-xs text-muted-foreground">
-                            Choose one water risk indicator and how results should be reported. These settings apply
+                            Choose one water risk analysis and how results should be reported. These settings apply
                             to all locations in this run.
                           </div>
                         </div>
@@ -669,7 +669,7 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
 
                       <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
-                          <Label className="text-xs">Water Risk Indicator</Label>
+                          <Label className="text-xs">Water Risk Analysis</Label>
                           <div className="space-y-2 mt-2">
                             {RISK_INDICATORS.map((ind) => {
                               const tip = INDICATOR_TOOLTIPS[ind];
