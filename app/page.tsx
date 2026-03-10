@@ -94,7 +94,7 @@ type Row = {
   crop: (typeof CROPS)[number] | string;
   irrigation: Irrig;
   quantity: string;
-  riskIndicators: (typeof RISK_INDICATORS)[number][];
+  riskIndicator: (typeof RISK_INDICATORS)[number];
   errors?: Partial<Record<keyof Omit<Row, "id" | "errors">, string>>;
 };
 
@@ -131,8 +131,8 @@ const validateRow = (r: Row) => {
   const q = Number(r.quantity);
   if (isNaN(q) || q <= 0) errors.quantity = "> 0";
 
-  if (!r.riskIndicators || r.riskIndicators.length === 0) {
-    errors.riskIndicators = "Select at least one";
+  if (!r.riskIndicator) {
+    errors.riskIndicator = "Select one";
   }
 
   return errors;
@@ -160,9 +160,9 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
   const [quantity, setQuantity] = useState("1000");
 
   // Global analysis controls
-  const [selectedIndicators, setSelectedIndicators] = useState<(typeof RISK_INDICATORS)[number][]>([
+  const [selectedIndicator, setSelectedIndicator] = useState<(typeof RISK_INDICATORS)[number]>(
     "WRI-Aqueduct Food Analysis",
-  ]);
+  );
   const [aggregationPreference, setAggregationPreference] = useState<AggregationPreference>("Watershed");
 
   // Import UI
@@ -279,7 +279,7 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
       crop,
       irrigation,
       quantity,
-      riskIndicators: selectedIndicators,
+      riskIndicator: selectedIndicator,
     };
 
     const errors = validateRow(r);
@@ -344,18 +344,12 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
     }
   };
 
-  const toggleIndicator = (ind: (typeof RISK_INDICATORS)[number], checked: boolean) => {
-    setSelectedIndicators((prev) => (checked ? [...prev, ind] : prev.filter((p) => p !== ind)));
+  const selectIndicator = (ind: (typeof RISK_INDICATORS)[number]) => {
+    setSelectedIndicator(ind);
 
     setRows((prev) =>
       prev.map((rr) => {
-        const nextIndicators = checked
-          ? rr.riskIndicators.includes(ind)
-            ? rr.riskIndicators
-            : [...rr.riskIndicators, ind]
-          : rr.riskIndicators.filter((p) => p !== ind);
-
-        const updated: Row = { ...rr, riskIndicators: nextIndicators };
+        const updated: Row = { ...rr, riskIndicator: ind };
         return { ...updated, errors: validateRow(updated) };
       }),
     );
@@ -648,7 +642,7 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
                                 <TableCell>{r.crop}</TableCell>
                                 <TableCell>{r.irrigation}</TableCell>
                                 <TableCell>{r.quantity}</TableCell>
-                                <TableCell>{r.riskIndicators.join(", ")}</TableCell>
+                                <TableCell>{r.riskIndicator}</TableCell>
                                 <TableCell className="flex items-center gap-2">
                                   <Pill ok={!r.errors || Object.keys(r.errors).length === 0} />
                                   <Button size="sm" variant="secondary" onClick={() => removeRow(r.id)}>
@@ -667,7 +661,7 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
                         <div>
                           <div className="text-sm font-semibold">Customize Analysis</div>
                           <div className="text-xs text-muted-foreground">
-                            Choose one or more water risk indicators and how results should be reported. These settings apply
+                            Choose one water risk indicator and how results should be reported. These settings apply
                             to all locations in this run.
                           </div>
                         </div>
@@ -675,17 +669,18 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
 
                       <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
-                          <Label className="text-xs">Water Risk Indicators</Label>
+                          <Label className="text-xs">Water Risk Indicator</Label>
                           <div className="space-y-2 mt-2">
                             {RISK_INDICATORS.map((ind) => {
                               const tip = INDICATOR_TOOLTIPS[ind];
                               return (
                                 <label key={ind} className="flex items-start gap-2 text-sm">
                                   <input
-                                    type="checkbox"
+                                    type="radio"
+                                    name="riskIndicator"
                                     className="mt-0.5"
-                                    checked={selectedIndicators.includes(ind)}
-                                    onChange={(e) => toggleIndicator(ind, e.target.checked)}
+                                    checked={selectedIndicator === ind}
+                                    onChange={() => selectIndicator(ind)}
                                   />
                                   <span className="flex-1 leading-snug">
                                     {ind}
@@ -873,7 +868,7 @@ function __runInlineTests() {
     crop: "Maize",
     irrigation: "Rainfed",
     quantity: "1000",
-    riskIndicators: ["WRI-Aqueduct Food Analysis"],
+    riskIndicator: "WRI-Aqueduct Food Analysis",
   };
 
   const countryOnly: Row = {
@@ -884,7 +879,7 @@ function __runInlineTests() {
     crop: "Soybean",
     irrigation: "Rainfed",
     quantity: "250",
-    riskIndicators: ["WRI-Aqueduct Food Analysis"],
+    riskIndicator: "WRI-Aqueduct Food Analysis",
   };
 
   const coordGood: Row = {
@@ -897,7 +892,7 @@ function __runInlineTests() {
     crop: "Wheat",
     irrigation: "All",
     quantity: "10",
-    riskIndicators: ["WRI-Aqueduct Food Analysis"],
+    riskIndicator: "WRI-Aqueduct Food Analysis",
   };
 
   const badBuf: Row = { ...good, id: "t3", bufferKm: "0" };
@@ -912,10 +907,10 @@ function __runInlineTests() {
     crop: "Wheat",
     irrigation: "All",
     quantity: "10",
-    riskIndicators: ["WRI-Aqueduct Food Analysis"],
+    riskIndicator: "WRI-Aqueduct Food Analysis",
   };
 
-  const noIndicators: Row = { ...good, id: "t6", riskIndicators: [] };
+  const missingIndicator: Row = { ...good, id: "t6", riskIndicator: "" as (typeof RISK_INDICATORS)[number] };
   const missingLat: Row = { ...coordGood, id: "t2b", latitude: "", location: ", 70.5" };
 
   console.assert(Object.keys(validateRow(good)).length === 0, "good row valid");
@@ -928,7 +923,7 @@ function __runInlineTests() {
     !!validateRow(badCoordParen).latitude || !!validateRow(badCoordParen).longitude,
     "invalid coord fields rejected",
   );
-  console.assert(!!validateRow(noIndicators).riskIndicators, "must select at least one indicator");
+  console.assert(!!validateRow(missingIndicator).riskIndicator, "must select one indicator");
   console.assert(AGGREGATION_OPTIONS.includes("Watershed"), "aggregation options include Watershed");
 }
 
