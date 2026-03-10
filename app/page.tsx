@@ -1,4 +1,5 @@
 "use client";
+
 import React, { useMemo, useState } from "react";
 import {
   ArrowUpDown,
@@ -22,38 +23,63 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // ===== Types & Constants =====
-type LocationType = "Coordinates" | "State" | "Country";
-
+type LocationType = "Coordinates" | "Country";
 type Irrig = "Rainfed" | "Irrigated" | "Mixed" | "Unknown" | "All";
 
 const CROPS = ["Maize", "Wheat", "Rice", "Soybean", "Cotton", "Sugarcane", "Barley", "Sorghum"] as const;
 
+const COUNTRY_OPTIONS = ["Brazil"] as const;
+const BRAZIL_STATES = [
+  "Acre",
+  "Alagoas",
+  "Amapá",
+  "Amazonas",
+  "Bahia",
+  "Ceará",
+  "Distrito Federal",
+  "Espírito Santo",
+  "Goiás",
+  "Maranhão",
+  "Mato Grosso",
+  "Mato Grosso do Sul",
+  "Minas Gerais",
+  "Pará",
+  "Paraíba",
+  "Paraná",
+  "Pernambuco",
+  "Piauí",
+  "Rio de Janeiro",
+  "Rio Grande do Norte",
+  "Rio Grande do Sul",
+  "Rondônia",
+  "Roraima",
+  "Santa Catarina",
+  "São Paulo",
+  "Sergipe",
+  "Tocantins",
+] as const;
+
 const RISK_INDICATORS = [
-  "WRI-Baseline Water Stress (WRI Aqueduct 4.0)",
-  "SBTN-Water Depletion (Brauman et al. 2016)",
-  "SBTN-Freshwater Quantity Targets v2 (Hogeboom et al. 2024)",
-  "SBTN-Unified Layer v2.1 (Link TBC)",
+  "WRI-Aqueduct Food Analysis",
+  "SBTN-Freshwater Quantity",
+  "SBTN-Freshwater Quality",
 ] as const;
 
 type AggregationPreference = "Watershed" | "Crop" | "Business Unit";
 const AGGREGATION_OPTIONS: AggregationPreference[] = ["Watershed", "Crop", "Business Unit"];
 
-const INDICATOR_TOOLTIPS: Record<(typeof RISK_INDICATORS)[number], { title: string; detail: string }> = {
-  "WRI-Baseline Water Stress (WRI Aqueduct 4.0)": {
-    title: "WRI Aqueduct 4.0",
-    detail: "Baseline Water Stress indicator from WRI Aqueduct 4.0. Use for high-level physical water risk screening.",
+const INDICATOR_TOOLTIPS: Record<string, { title: string; detail: string }> = {
+  "WRI-Aqueduct Food Analysis": {
+    title: "WRI Aqueduct Food Analysis",
+    detail: "Aqueduct-based analysis tailored for agricultural supply chains and crop-level water risk screening.",
   },
-  "SBTN-Water Depletion (Brauman et al. 2016)": {
-    title: "SBTN • Brauman et al. 2016",
-    detail: "Water Depletion layer aligned with SBTN freshwater quantity concepts (Brauman et al., 2016).",
+  "SBTN-Freshwater Quantity": {
+    title: "SBTN Freshwater Quantity",
+    detail: "Science Based Targets Network freshwater quantity indicator for assessing water availability and depletion risks.",
   },
-  "SBTN-Freshwater Quantity Targets v2 (Hogeboom et al. 2024)": {
-    title: "SBTN • Hogeboom et al. 2024",
-    detail: "Freshwater quantity targets v2 layer (Hogeboom et al., 2024) for target-setting workflows.",
-  },
-  "SBTN-Unified Layer v2.1 (Link TBC)": {
-    title: "SBTN Unified Layer v2.1",
-    detail: "Unified Layer v2.1 placeholder. Link and final documentation to be confirmed.",
+  "SBTN-Freshwater Quality": {
+    title: "SBTN Freshwater Quality",
+    detail: "Science Based Targets Network freshwater quality indicator for evaluating pollution-related water risks.",
   },
 };
 
@@ -61,6 +87,9 @@ type Row = {
   id: string;
   locationType: LocationType;
   location: string;
+  state?: string;
+  latitude?: string;
+  longitude?: string;
   bufferKm: string;
   crop: (typeof CROPS)[number] | string;
   irrigation: Irrig;
@@ -76,9 +105,17 @@ const validateRow = (r: Row) => {
   if (!r.location) errors.location = "Required";
 
   if (r.locationType === "Coordinates") {
-    const strict = /^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?$/;
-    if (!strict.test(r.location)) {
-      errors.location = "Use strict 'lat, lon' format (e.g., 35.5, 70.5)";
+    if (!r.latitude) errors.latitude = "Required";
+    if (!r.longitude) errors.longitude = "Required";
+
+    const lat = Number(r.latitude);
+    const lon = Number(r.longitude);
+
+    if (r.latitude && (isNaN(lat) || lat < -90 || lat > 90)) {
+      errors.latitude = "Latitude must be between -90 and 90";
+    }
+    if (r.longitude && (isNaN(lon) || lon < -180 || lon > 180)) {
+      errors.longitude = "Longitude must be between -180 and 180";
     }
   }
 
@@ -114,6 +151,9 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
   // Manual entry fields
   const [locationType, setLocationType] = useState<LocationType>("Coordinates");
   const [location, setLocation] = useState("");
+  const [selectedState, setSelectedState] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
   const [bufferKm, setBufferKm] = useState("25");
   const [crop, setCrop] = useState<string>("Maize");
   const [irrigation, setIrrigation] = useState<Irrig>("Rainfed");
@@ -121,7 +161,7 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
 
   // Global analysis controls
   const [selectedIndicators, setSelectedIndicators] = useState<(typeof RISK_INDICATORS)[number][]>([
-    "WRI-Baseline Water Stress (WRI Aqueduct 4.0)",
+    "WRI-Aqueduct Food Analysis",
   ]);
   const [aggregationPreference, setAggregationPreference] = useState<AggregationPreference>("Watershed");
 
@@ -138,12 +178,8 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
 
   const locationPlaceholder = useMemo(() => {
     switch (locationType) {
-      case "Coordinates":
-        return "e.g., 35.5, 70.5 (lat, lon)";
-      case "State":
-        return "e.g., California";
       case "Country":
-        return "e.g., Mexico";
+        return "e.g., Brazil";
       default:
         return "Enter location";
     }
@@ -230,10 +266,15 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
   );
 
   const addRow = () => {
+    const coordinateLocation = latitude && longitude ? `${latitude}, ${longitude}` : "";
+
     const r: Row = {
       id: crypto.randomUUID(),
       locationType,
-      location,
+      location: locationType === "Coordinates" ? coordinateLocation : location,
+      state: locationType === "Country" ? selectedState : undefined,
+      latitude: locationType === "Coordinates" ? latitude : undefined,
+      longitude: locationType === "Coordinates" ? longitude : undefined,
       bufferKm,
       crop,
       irrigation,
@@ -272,7 +313,7 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
       "Wheat",
       "All",
       "10",
-      "WRI-Baseline Water Stress (WRI Aqueduct 4.0)",
+      "WRI-Aqueduct Food Analysis",
     ].join(",");
     return [header, example].join("\n");
   };
@@ -306,7 +347,6 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
   const toggleIndicator = (ind: (typeof RISK_INDICATORS)[number], checked: boolean) => {
     setSelectedIndicators((prev) => (checked ? [...prev, ind] : prev.filter((p) => p !== ind)));
 
-    // Keep preview consistent: apply to existing rows too
     setRows((prev) =>
       prev.map((rr) => {
         const nextIndicators = checked
@@ -333,9 +373,7 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
 
           <TabsContent value="asc" className="mt-6">
             <div className="grid grid-cols-2 gap-6 items-start">
-              {/* Left Panel */}
               <div className="space-y-6">
-                {/* Locations & Inputs */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -371,7 +409,6 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
                       </div>
                     </div>
 
-                    {/* Quick import */}
                     <div
                       className={
                         inputMode === "quick" ? "rounded-md border p-3 flex flex-wrap items-center gap-2" : "hidden"
@@ -410,46 +447,113 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
                       </div>
                     </div>
 
-                    {/* Manual Inputs */}
                     <div className={inputMode === "manual" ? "grid grid-cols-1 md:grid-cols-2 gap-3" : "hidden"}>
                       <div>
                         <Label className="text-xs">Location type</Label>
-                        <Select value={locationType} onValueChange={(v: string) => setLocationType(v as LocationType)}>
+                        <Select
+                          value={locationType}
+                          onValueChange={(v: string) => {
+                            const next = v as LocationType;
+                            setLocationType(next);
+
+                            if (next === "Coordinates") {
+                              setLocation("");
+                              setSelectedState("");
+                            } else {
+                              setLatitude("");
+                              setLongitude("");
+                            }
+                          }}
+                        >
                           <SelectTrigger className="w-full h-9 text-sm">
                             <SelectValue placeholder="Select type" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="Coordinates">Coordinates</SelectItem>
-                            <SelectItem value="State">State</SelectItem>
                             <SelectItem value="Country">Country</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
 
-                      <div className="md:col-span-2">
-                        <Label className="text-xs">Location</Label>
-                        <Input
-                          className="w-full h-9 text-sm"
-                          placeholder={locationPlaceholder}
-                          value={location}
-                          onChange={(e) => setLocation(e.target.value)}
-                        />
-                      </div>
-
-                      <div>
-                        <Label className="text-xs">Radius (km)</Label>
-                        <Input
-                          className={`w-full h-9 text-sm ${locationType !== "Coordinates" ? "bg-muted opacity-60 cursor-not-allowed" : ""}`}
-                          value={bufferKm}
-                          onChange={(e) => setBufferKm(e.target.value)}
-                          disabled={locationType !== "Coordinates"}
-                        />
-                        {locationType !== "Coordinates" && (
-                          <div className="text-[11px] text-muted-foreground mt-1">
-                            Radius only applies to point locations (Coordinates).
+                      {locationType === "Coordinates" ? (
+                        <div className="md:col-span-2 grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-xs">Latitude</Label>
+                            <Input
+                              className="w-full h-9 text-sm"
+                              placeholder="e.g., 35.5"
+                              value={latitude}
+                              onChange={(e) => setLatitude(e.target.value)}
+                            />
                           </div>
-                        )}
-                      </div>
+                          <div>
+                            <Label className="text-xs">Longitude</Label>
+                            <Input
+                              className="w-full h-9 text-sm"
+                              placeholder="e.g., 70.5"
+                              value={longitude}
+                              onChange={(e) => setLongitude(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="md:col-span-2">
+                          <Label className="text-xs">Location</Label>
+                          <Select
+                            value={location}
+                            onValueChange={(v: string) => {
+                              setLocation(v);
+                              setSelectedState("");
+                            }}
+                          >
+                            <SelectTrigger className="w-full h-9 text-sm">
+                              <SelectValue placeholder="Select country" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {COUNTRY_OPTIONS.map((c) => (
+                                <SelectItem key={c} value={c}>
+                                  {c}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
+                      {locationType === "Country" && (
+                        <div>
+                          <Label className="text-xs">State</Label>
+                          <Select value={selectedState} onValueChange={(v: string) => setSelectedState(v)}>
+                            <SelectTrigger className="w-full h-9 text-sm">
+                              <SelectValue placeholder={location === "Brazil" ? "Select state" : "Select country first"} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {location === "Brazil" ? (
+                                BRAZIL_STATES.map((s) => (
+                                  <SelectItem key={s} value={s}>
+                                    {s}
+                                  </SelectItem>
+                                ))
+                              ) : (
+                                <SelectItem value="__disabled" disabled>
+                                  Select Brazil first
+                                </SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
+                      {locationType === "Coordinates" && (
+                        <div>
+                          <Label className="text-xs">Radius (km)</Label>
+                          <Input
+                            className="w-full h-9 text-sm"
+                            value={bufferKm}
+                            onChange={(e) => setBufferKm(e.target.value)}
+                          />
+                        </div>
+                      )}
 
                       <div>
                         <Label className="text-xs">Crop</Label>
@@ -501,7 +605,6 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
                   </CardContent>
                 </Card>
 
-                {/* Inputs Table */}
                 <Card>
                   <CardHeader className="flex items-start justify-between">
                     <div>
@@ -537,9 +640,11 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
                             tableWithErrors.map((r) => (
                               <TableRow key={r.id}>
                                 <TableCell>
-                                  {r.locationType}: {r.location}
+                                  {r.locationType === "Country"
+                                    ? `Country: ${r.location}${r.state ? ` — State: ${r.state}` : ""}`
+                                    : `Coordinates: ${r.latitude ?? ""}, ${r.longitude ?? ""}`}
                                 </TableCell>
-                                <TableCell>{r.bufferKm} km</TableCell>
+                                <TableCell>{r.bufferKm ? `${r.bufferKm} km` : "—"}</TableCell>
                                 <TableCell>{r.crop}</TableCell>
                                 <TableCell>{r.irrigation}</TableCell>
                                 <TableCell>{r.quantity}</TableCell>
@@ -557,7 +662,6 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
                       </Table>
                     </div>
 
-                    {/* Customize Analysis */}
                     <div className="mt-4 rounded-md border p-3">
                       <div className="flex items-start justify-between gap-3">
                         <div>
@@ -635,7 +739,6 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
                   </CardContent>
                 </Card>
 
-                {/* Results */}
                 <Card>
                   <CardHeader>
                     <CardTitle>Results</CardTitle>
@@ -724,7 +827,6 @@ export default function AgriculturalSupplyChainAnalyzerMock() {
                 </Card>
               </div>
 
-              {/* Right Panel: Map */}
               <div>
                 <Card className="h-full sticky top-6">
                   <CardHeader>
@@ -765,23 +867,37 @@ function __runInlineTests() {
   const good: Row = {
     id: "t1",
     locationType: "Country",
-    location: "United States",
+    location: "Brazil",
+    state: "São Paulo",
     bufferKm: "25",
     crop: "Maize",
     irrigation: "Rainfed",
     quantity: "1000",
-    riskIndicators: ["WRI-Baseline Water Stress (WRI Aqueduct 4.0)"],
+    riskIndicators: ["WRI-Aqueduct Food Analysis"],
+  };
+
+  const countryOnly: Row = {
+    id: "t1b",
+    locationType: "Country",
+    location: "Brazil",
+    bufferKm: "",
+    crop: "Soybean",
+    irrigation: "Rainfed",
+    quantity: "250",
+    riskIndicators: ["WRI-Aqueduct Food Analysis"],
   };
 
   const coordGood: Row = {
     id: "t2",
     locationType: "Coordinates",
     location: "35.5, 70.5",
+    latitude: "35.5",
+    longitude: "70.5",
     bufferKm: "10",
     crop: "Wheat",
     irrigation: "All",
     quantity: "10",
-    riskIndicators: ["WRI-Baseline Water Stress (WRI Aqueduct 4.0)"],
+    riskIndicators: ["WRI-Aqueduct Food Analysis"],
   };
 
   const badBuf: Row = { ...good, id: "t3", bufferKm: "0" };
@@ -790,23 +906,29 @@ function __runInlineTests() {
     id: "t5",
     locationType: "Coordinates",
     location: "(35.5, 70.5)",
+    latitude: "(35.5",
+    longitude: "70.5)",
     bufferKm: "10",
     crop: "Wheat",
     irrigation: "All",
     quantity: "10",
-    riskIndicators: ["WRI-Baseline Water Stress (WRI Aqueduct 4.0)"],
+    riskIndicators: ["WRI-Aqueduct Food Analysis"],
   };
 
   const noIndicators: Row = { ...good, id: "t6", riskIndicators: [] };
+  const missingLat: Row = { ...coordGood, id: "t2b", latitude: "", location: ", 70.5" };
 
   console.assert(Object.keys(validateRow(good)).length === 0, "good row valid");
+  console.assert(Object.keys(validateRow(countryOnly)).length === 0, "country-only row valid");
   console.assert(Object.keys(validateRow(coordGood)).length === 0, "coords valid");
-  console.assert(!!validateRow(badBuf).bufferKm, "buffer must be > 0");
-  console.assert(!!validateRow(badQty).quantity, "quantity must be > 0");
-  console.assert(!!validateRow(badCoordParen).location, "paren coords invalid");
+  console.assert(!!validateRow(missingLat).latitude, "latitude required for coordinates");
+  console.assert(!!validateRow(badBuf).bufferKm, "radius must be > 0 when provided");
+  console.assert(!!validateRow(badQty).quantity, "volume must be > 0");
+  console.assert(
+    !!validateRow(badCoordParen).latitude || !!validateRow(badCoordParen).longitude,
+    "invalid coord fields rejected",
+  );
   console.assert(!!validateRow(noIndicators).riskIndicators, "must select at least one indicator");
-
-  // Extra sanity check for aggregation options
   console.assert(AGGREGATION_OPTIONS.includes("Watershed"), "aggregation options include Watershed");
 }
 
